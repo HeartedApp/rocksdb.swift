@@ -46,5 +46,6 @@ Packages
 xcuserdata
 DerivedData/
 *.xcodeproj
+.swiftpm
 
 # *** End Swift Package Manager ***

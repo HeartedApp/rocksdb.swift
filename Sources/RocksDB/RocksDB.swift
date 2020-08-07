@@ -24,6 +24,8 @@ public final class RocksDB {
 
         case batchFailed(message: String)
 
+        case createColumnFamilyFailed(message: String)
+        
         case dataNotConvertible
     }
 
@@ -39,6 +41,8 @@ public final class RocksDB {
     private let writeOptions: OpaquePointer!
     private let readOptions: OpaquePointer!
     private let db: OpaquePointer!
+    
+    private var columnFamilies: Dictionary<String, OpaquePointer> = [:]
 
     private var errorPointer: UnsafeMutablePointer<Int8>? = nil
 
@@ -51,12 +55,11 @@ public final class RocksDB {
     /// - parameter prefix: The prefix which will be appended to all keys for operations on this instance.
     ///
     /// - throws: If the database file cannot be opened (`RocksDB.Error.openFailed(message:)`)
-    public init(path: URL, prefix: String? = nil) throws {
+    public init(path: URL, prefix: String? = nil, columnFamilyOptions: [String: OpaquePointer] = [:]) throws {
         self.path = path
         self.prefix = prefix
 
-        self.dbOptions = rocksdb_options_create()
-
+        dbOptions = rocksdb_options_create()
         // create the DB if it's not already present
         rocksdb_options_set_create_if_missing(dbOptions, 1)
 
@@ -72,7 +75,23 @@ public final class RocksDB {
         }
 
         // open DB
-        self.db = rocksdb_open(dbOptions, path.path, &errorPointer)
+        if (columnFamilyOptions.isEmpty) {
+            self.db = rocksdb_open(dbOptions, path.path, &errorPointer)
+        } else {
+            let columnFamiliesOptionsPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
+            let columnFamiliesNamesPointer = UnsafeMutablePointer<UnsafePointer<Int8>?>.allocate(capacity: columnFamilyOptions.count)
+            let columnFamiliesPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
+            var i = 0
+            for (columnFamilyName, columnFamilyOption) in columnFamilyOptions {
+                columnFamiliesOptionsPointer[i] = columnFamilyOption
+                columnFamiliesNamesPointer[i] = (columnFamilyName as NSString).utf8String
+                self.columnFamilies[columnFamilyName] = columnFamiliesPointer[i]
+                i += 1
+            }
+            
+            self.db = rocksdb_open_column_families(dbOptions, path.path, Int32(columnFamilyOptions.count), columnFamiliesNamesPointer, columnFamiliesOptionsPointer, columnFamiliesPointer, &errorPointer)
+        }
+        
 
         try throwIfError(err: &errorPointer, throwable: Error.openFailed)
 
@@ -127,6 +146,11 @@ public final class RocksDB {
         return key
     }
 
+    public func createColumnFamily(name: String, options: OpaquePointer) {
+        rocksdb_create_column_family(db, options, name, &errorPointer)
+        try! throwIfError(err: &errorPointer, throwable: Error.createColumnFamilyFailed)
+    }
+    
     // MARK: - Library functions
 
     /// Puts the given value into this database for the given key.
@@ -147,6 +171,19 @@ public final class RocksDB {
 
         try throwIfError(err: &errorPointer, throwable: Error.putFailed)
     }
+    
+    public func put(_ columnFamily: OpaquePointer?, key: String, value: Data) throws {
+        let key = getPrefixedKey(from: key)
+
+        let cValue = [UInt8](value).map { uint8Val in
+            return Int8(bitPattern: uint8Val)
+        }
+
+        rocksdb_put_cf(db, writeOptions, columnFamily, key, strlen(key), cValue, cValue.count, &errorPointer)
+
+        try throwIfError(err: &errorPointer, throwable: Error.putFailed)
+    }
+
 
     /// Puts the given value encoded according to its definition into this database for the given key.
     /// Overwrites the key if it is already present.
@@ -160,6 +197,10 @@ public final class RocksDB {
         try put(key: key, value: value.makeData())
     }
 
+    public func put<T: RocksDBValueRepresentable>(_ columnFamily: String, key: String, value: T) throws {
+        try put(columnFamily, key: key, value: value.makeData())
+    }
+    
     /// Returns the value for the given key in the database.
     /// Returns empty Data if the key is not set in the database.
     ///
