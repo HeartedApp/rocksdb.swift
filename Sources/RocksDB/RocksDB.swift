@@ -81,7 +81,7 @@ public final class RocksDB {
         }
 
         // open DB
-        if (columnFamilies.isEmpty) {
+        if (columnFamilyOptions.isEmpty) {
             self.db = rocksdb_open(dbOptions, path, &errorPointer)
         } else {
             let columnFamiliesOptionsPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
