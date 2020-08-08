@@ -113,13 +113,13 @@ public final class RocksDB {
         }
     }
 
-    public static func listColumnFamilies(path: UnsafePointer<Int8>, dbOptions: OpaquePointer) -> [String] {
+    public static func listColumnFamilies(path: URL, dbOptions: OpaquePointer) -> [String] {
         var columnFamilies: [String] = []
         var err: UnsafeMutablePointer<Int8>? = nil
         var lencf: Int = 0
-        let columnFamiliesPointer = rocksdb_list_column_families(dbOptions, path, &lencf, &err)
+        let columnFamiliesPointer = rocksdb_list_column_families(dbOptions, path.path, &lencf, &err)
         if columnFamiliesPointer != nil && lencf > 0 {
-            for i in 0 ... lencf {
+            for i in 0 ... lencf - 1 {
                 columnFamilies.append(String(cString: columnFamiliesPointer![i]!))
             }
         }
