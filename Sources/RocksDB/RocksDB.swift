@@ -55,7 +55,7 @@ public final class RocksDB {
     /// - parameter prefix: The prefix which will be appended to all keys for operations on this instance.
     ///
     /// - throws: If the database file cannot be opened (`RocksDB.Error.openFailed(message:)`)
-    public init(path: URL, prefix: String? = nil, columnFamilyOptions: [String: OpaquePointer] = [:]) throws {
+    public init(path: URL, prefix: String? = nil, columnFamilies: [String: OpaquePointer?] = [:]) throws {
         self.path = path
         self.prefix = prefix
 
@@ -75,21 +75,21 @@ public final class RocksDB {
         }
 
         // open DB
-        if (columnFamilyOptions.isEmpty) {
+        if (columnFamilies.isEmpty) {
             self.db = rocksdb_open(dbOptions, path.path, &errorPointer)
         } else {
-            let columnFamiliesOptionsPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
-            let columnFamiliesNamesPointer = UnsafeMutablePointer<UnsafePointer<Int8>?>.allocate(capacity: columnFamilyOptions.count)
-            let columnFamiliesPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
+            let columnFamiliesOptionsPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilies.count)
+            let columnFamiliesNamesPointer = UnsafeMutablePointer<UnsafePointer<Int8>?>.allocate(capacity: columnFamilies.count)
+            let columnFamiliesPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilies.count)
             var i = 0
-            for (columnFamilyName, columnFamilyOption) in columnFamilyOptions {
+            for (columnFamilyName, columnFamilyOption) in columnFamilies {
                 columnFamiliesOptionsPointer[i] = columnFamilyOption
                 columnFamiliesNamesPointer[i] = (columnFamilyName as NSString).utf8String
                 self.columnFamilies[columnFamilyName] = columnFamiliesPointer[i]
                 i += 1
             }
             
-            self.db = rocksdb_open_column_families(dbOptions, path.path, Int32(columnFamilyOptions.count), columnFamiliesNamesPointer, columnFamiliesOptionsPointer, columnFamiliesPointer, &errorPointer)
+            self.db = rocksdb_open_column_families(dbOptions, path.path, Int32(columnFamilies.count), columnFamiliesNamesPointer, columnFamiliesOptionsPointer, columnFamiliesPointer, &errorPointer)
         }
         
 
@@ -111,6 +111,20 @@ public final class RocksDB {
         if db != nil && isOpen {
             rocksdb_close(db)
         }
+    }
+
+    public static func listColumnFamilies(path: UnsafePointer<Int8>, dbOptions: OpaquePointer) -> [String] {
+        var columnFamilies: [String] = []
+        var err: UnsafeMutablePointer<Int8>? = nil
+        var lencf: Int = 0
+        let columnFamiliesPointer = rocksdb_list_column_families(dbOptions, path, &lencf, &err)
+        if columnFamiliesPointer != nil && lencf > 0 {
+            for i in 0 ... lencf {
+                columnFamilies.append(String(cString: columnFamiliesPointer![i]!))
+            }
+        }
+
+        return columnFamilies
     }
 
     // MARK: - Helper functions
