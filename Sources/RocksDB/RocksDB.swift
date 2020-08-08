@@ -8,6 +8,10 @@ import Glibc
 import Darwin
 #endif
 
+public typealias ColumnFamily = OpaquePointer
+public typealias Options = OpaquePointer
+public typealias DB = OpaquePointer
+
 public final class RocksDB {
 
     // MARK: - Errors
@@ -39,12 +43,12 @@ public final class RocksDB {
 
     private var isOpen = false
 
-    private let dbOptions: OpaquePointer!
-    private let writeOptions: OpaquePointer!
-    private let readOptions: OpaquePointer!
-    private let db: OpaquePointer!
+    private let dbOptions: Options!
+    private let writeOptions: Options!
+    private let readOptions: Options!
+    private let db: DB!
     
-    public var columnFamilies: Dictionary<String, OpaquePointer> = [:]
+    public var columnFamilies: Dictionary<String, ColumnFamily> = [:]
 
     private var errorPointer: UnsafeMutablePointer<Int8>? = nil
 
@@ -57,7 +61,7 @@ public final class RocksDB {
     /// - parameter prefix: The prefix which will be appended to all keys for operations on this instance.
     ///
     /// - throws: If the database file cannot be opened (`RocksDB.Error.openFailed(message:)`)
-    public init(path: String, prefix: String? = nil, columnFamilies: [String: OpaquePointer?] = [:]) throws {
+    public init(path: String, prefix: String? = nil, columnFamilyOptions: [String: ColumnFamily?] = [:]) throws {
         self.path = path
         self.prefix = prefix
 
@@ -80,21 +84,21 @@ public final class RocksDB {
         if (columnFamilies.isEmpty) {
             self.db = rocksdb_open(dbOptions, path, &errorPointer)
         } else {
-            let columnFamiliesOptionsPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilies.count)
-            let columnFamiliesNamesPointer = UnsafeMutablePointer<UnsafePointer<Int8>?>.allocate(capacity: columnFamilies.count)
-            let columnFamiliesPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilies.count)
+            let columnFamiliesOptionsPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
+            let columnFamiliesNamesPointer = UnsafeMutablePointer<UnsafePointer<Int8>?>.allocate(capacity: columnFamilyOptions.count)
+            let columnFamiliesPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
+            
+            self.db = rocksdb_open_column_families(dbOptions, path, Int32(columnFamilies.count), columnFamiliesNamesPointer, columnFamiliesOptionsPointer, columnFamiliesPointer, &errorPointer)
+            
             var i = 0
-            for (columnFamilyName, columnFamilyOption) in columnFamilies {
+            for (columnFamilyName, columnFamilyOption) in columnFamilyOptions {
                 columnFamiliesOptionsPointer[i] = columnFamilyOption
                 columnFamiliesNamesPointer[i] = (columnFamilyName as NSString).utf8String
                 self.columnFamilies[columnFamilyName] = columnFamiliesPointer[i]
                 i += 1
             }
-            
-            self.db = rocksdb_open_column_families(dbOptions, path, Int32(columnFamilies.count), columnFamiliesNamesPointer, columnFamiliesOptionsPointer, columnFamiliesPointer, &errorPointer)
         }
         
-
         try throwIfError(err: &errorPointer, throwable: Error.openFailed)
 
         isOpen = true
@@ -115,7 +119,7 @@ public final class RocksDB {
         }
     }
 
-    public static func listColumnFamilies(path: String, dbOptions: OpaquePointer) -> [String] {
+    public static func listColumnFamilies(path: String, dbOptions: Options) -> [String] {
         var columnFamilies: [String] = []
         var err: UnsafeMutablePointer<Int8>? = nil
         var lencf: Int = 0
@@ -128,23 +132,7 @@ public final class RocksDB {
 
         return columnFamilies
     }
-    /*
-    public static func getColumnFamilies(path: String, dbOptions: OpaquePointer, columnFamilyOptions: [String: OpaquePointer], columnFamilies: [String: OpaquePointer]) {
-        
-        let columnFamiliesOptionsPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
-        let columnFamiliesNamesPointer = UnsafeMutablePointer<UnsafePointer<Int8>?>.allocate(capacity: columnFamilyOptions.count)
-        let columnFamiliesPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
-        var i = 0
-        for (columnFamilyName, columnFamilyOption) in columnFamilyOptions {
-            columnFamiliesOptionsPointer[i] = columnFamilyOption
-            columnFamiliesNamesPointer[i] = (columnFamilyName as NSString).utf8String
-            self.columnFamilies[columnFamilyName] = columnFamiliesPointer[i]
-            i += 1
-        }
-        
-        rocksdb_open_column_families(dbOptions, path, Int32(columnFamilyOptions.count), columnFamilyOptions.keys, <#T##column_family_options: UnsafeMutablePointer<OpaquePointer?>!##UnsafeMutablePointer<OpaquePointer?>?#>, <#T##column_family_handles: UnsafeMutablePointer<OpaquePointer?>!##UnsafeMutablePointer<OpaquePointer?>!#>, <#T##errptr: UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>!##UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>!#>)
-    }*/
-
+    
     // MARK: - Helper functions
 
     /// Throws the given throwable Error if the given error pointer contains an error message.
@@ -178,13 +166,13 @@ public final class RocksDB {
         return key
     }
 
-    public func createColumnFamily(name: String, options: OpaquePointer) -> OpaquePointer {
+    public func createColumnFamily(name: String, options: Options) -> OpaquePointer {
         let handle = rocksdb_create_column_family(db, options, name, &errorPointer)
         try! throwIfError(err: &errorPointer, throwable: Error.createColumnFamilyFailed)
         return handle!
     }
     
-    public func dropColumnFamily(handle: OpaquePointer) {
+    public func dropColumnFamily(_ handle: ColumnFamily) {
         var err: UnsafeMutablePointer<Int8>? = nil
         rocksdb_drop_column_family(db, handle, &err)
         try! throwIfError(err: &errorPointer, throwable: Error.dropColumnFamilyFailed)
@@ -211,7 +199,7 @@ public final class RocksDB {
         try throwIfError(err: &errorPointer, throwable: Error.putFailed)
     }
     
-    public func put(_ columnFamily: OpaquePointer?, key: String, value: Data) throws {
+    public func put(_ columnFamily: ColumnFamily, key: String, value: Data) throws {
         let key = getPrefixedKey(from: key)
 
         let cValue = [UInt8](value).map { uint8Val in
@@ -236,7 +224,7 @@ public final class RocksDB {
         try put(key: key, value: value.makeData())
     }
 
-    public func put<T: RocksDBValueRepresentable>(_ columnFamily: String, key: String, value: T) throws {
+    public func put<T: RocksDBValueRepresentable>(_ columnFamily: ColumnFamily, key: String, value: T) throws {
         try put(columnFamily, key: key, value: value.makeData())
     }
     
@@ -260,7 +248,7 @@ public final class RocksDB {
 
         return copy
     }
-
+    
     /// Returns the value for the given key in the database initialized with the given type.
     ///
     /// The given type decides how to treat empty fields. Because the database returns an empty Data object
@@ -273,6 +261,42 @@ public final class RocksDB {
     ///           if the given type is not initializable from the data (`Error.dataNotConvertible`)
     public func get<T: RocksDBValueInitializable>(type: T.Type, key: String) throws -> T {
         return try type.init(data: get(key: key))
+    }
+    
+
+    /// Returns the value for the given key in the database initialized with the given type.
+    ///
+    /// The given type decides how to treat empty fields. Because the database returns an empty Data object
+    /// if the key does not exist, `String` will for example be an empty String.
+    ///
+    /// - parameter type: The type to which the data should be converted.
+    /// - parameter key: The key to search the database for.
+    ///
+    /// - throws: If the get operation fails (`Error.getFailed(message:)`) and
+    ///           if the given type is not initializable from the data (`Error.dataNotConvertible`)
+    public func get<T: RocksDBValueInitializable>(_ columnFamily: ColumnFamily, type: T.Type, key: String) throws -> T {
+        return try type.init(data: get(columnFamily, key: key))
+    }
+    
+    /// Returns the value for the given key in the database.
+    /// Returns empty Data if the key is not set in the database.
+    ///
+    /// - parameter key: The key to search the database for.
+    ///
+    /// - throws: If the get operation fails (`Error.getFailed(message:)`)
+    public func get(_ columnFamily: ColumnFamily, key: String) throws -> Data {
+        let key = getPrefixedKey(from: key)
+
+        var len: Int = 0
+        let returnValue = rocksdb_get_cf(db, readOptions, columnFamily, key, strlen(key), &len, &errorPointer)
+
+        try throwIfError(err: &errorPointer, throwable: Error.getFailed)
+
+        let copy = Data(Array(UnsafeBufferPointer(start: returnValue, count: len)).map({ UInt8(bitPattern: $0) }))
+
+        free(returnValue)
+
+        return copy
     }
 
     /// Deletes the given key in the database, if it is available.
@@ -287,13 +311,26 @@ public final class RocksDB {
 
         try throwIfError(err: &errorPointer, throwable: Error.deleteFailed)
     }
+    
+    /// Deletes the given key in the database, if it is available.
+    ///
+    /// - parameter key: The key to delete.
+    ///
+    /// - throws: If the delete operation fails (`Error.deleteFailed(message:)`)
+    public func delete(_ columnFamily: ColumnFamily, key: String) throws {
+        let key = getPrefixedKey(from: key)
+
+        rocksdb_delete_cf(db, writeOptions, columnFamily, key, strlen(key), &errorPointer)
+
+        try throwIfError(err: &errorPointer, throwable: Error.deleteFailed)
+    }
 
     public func sequence<Key: RocksDBValueInitializable, Value: RocksDBValueInitializable>(
         keyType: Key.Type? = nil,
         valueType: Value.Type? = nil,
         gte: String? = nil
     ) -> RocksDBSequence<Key, Value> {
-        return RocksDBSequence(iterator: RocksDBIterator(db: db, prefix: prefix, gte: gte, lte: nil))
+        return RocksDBSequence(iterator: RocksDBIterator(db: db, columnFamily: nil, prefix: prefix, gte: gte, lte: nil))
     }
 
     public func sequence<Key: RocksDBValueInitializable, Value: RocksDBValueInitializable>(
@@ -301,7 +338,25 @@ public final class RocksDB {
         valueType: Value.Type? = nil,
         lte: String
     ) -> RocksDBSequence<Key, Value> {
-        return RocksDBSequence(iterator: RocksDBIterator(db: db, prefix: prefix, gte: nil, lte: lte))
+        return RocksDBSequence(iterator: RocksDBIterator(db: db, columnFamily: nil, prefix: prefix, gte: nil, lte: lte))
+    }
+    
+    public func sequence<Key: RocksDBValueInitializable, Value: RocksDBValueInitializable>(
+        _ columnFamily: ColumnFamily,
+        keyType: Key.Type? = nil,
+        valueType: Value.Type? = nil,
+        gte: String? = nil
+    ) -> RocksDBSequence<Key, Value> {
+        return RocksDBSequence(iterator: RocksDBIterator(db: db, columnFamily: columnFamily, prefix: prefix, gte: gte, lte: nil))
+    }
+
+    public func sequence<Key: RocksDBValueInitializable, Value: RocksDBValueInitializable>(
+        _ columnFamily: ColumnFamily,
+        keyType: Key.Type? = nil,
+        valueType: Value.Type? = nil,
+        lte: String
+    ) -> RocksDBSequence<Key, Value> {
+        return RocksDBSequence(iterator: RocksDBIterator(db: db, columnFamily: columnFamily, prefix: prefix, gte: nil, lte: lte))
     }
 
     /// Write the given Operations as a batch update to the database.
@@ -311,6 +366,35 @@ public final class RocksDB {
     ///
     /// - throws: If the write operation fails (`Error.putFailed(message:)`)
     public func batch<Value: RocksDBValueConvertible>(operations: [RocksDBBatchOperation<Value>]) throws {
+        let writeBatch = rocksdb_writebatch_create()
+
+        for operation in operations {
+            switch operation {
+            case .delete(let key):
+                let key = getPrefixedKey(from: key)
+                rocksdb_writebatch_delete(writeBatch, key, strlen(key))
+            case .put(let key, let value):
+                let key = getPrefixedKey(from: key)
+                let cValue = try [UInt8](value.makeData()).map { uint8Val in
+                    return Int8(bitPattern: uint8Val)
+                }
+                rocksdb_writebatch_put(writeBatch, key, strlen(key), cValue, cValue.count)
+            }
+        }
+
+        rocksdb_write(db, writeOptions, writeBatch, &errorPointer)
+
+        try throwIfError(err: &errorPointer, throwable: Error.batchFailed)
+    }
+    
+    /// Write the given Operations as a batch update to the database.
+    /// The operations will be executed in order as they appear in the given array.
+    ///
+    /// - parameter operations: The array of operations to execute in order as a batch.
+    ///
+    /// - throws: If the write operation fails (`Error.putFailed(message:)`)
+    public func batch<Value: RocksDBValueConvertible>(
+        _ columnFamily: ColumnFamily,operations: [RocksDBBatchOperation<Value>]) throws {
         let writeBatch = rocksdb_writebatch_create()
 
         for operation in operations {
@@ -365,11 +449,12 @@ public class RocksDBIterator<K: RocksDBValueInitializable, V: RocksDBValueInitia
     /// - parameter prefix: The prefix of the iter operation.
     /// - parameter gte: Search for keys greater than or equal the given (unprefixed).
     /// - parameter lte: Search for keys lower than or equal the given (unprefixed). Starts a reverse search.
-    fileprivate init(db: OpaquePointer, prefix: String?, gte: String?, lte: String?) {
+    fileprivate init(db: OpaquePointer, columnFamily: ColumnFamily?, prefix: String?, gte: String?, lte: String?) {
         self.readopts = rocksdb_readoptions_create()
         if let _ = prefix {
             rocksdb_readoptions_set_prefix_same_as_start(readopts, 1)
         }
+        
 //        if let gte = gte {
 //            rocksdb_readoptions_set_iterate_lower_bound(readopts, gte, strlen(gte))
 //        }
@@ -377,7 +462,11 @@ public class RocksDBIterator<K: RocksDBValueInitializable, V: RocksDBValueInitia
 //            rocksdb_readoptions_set_iterate_upper_bound(readopts, lte, strlen(lte))
 //        }
 
-        self.iterator = rocksdb_create_iterator(db, readopts)
+        if (columnFamily != nil) {
+            self.iterator = rocksdb_create_iterator_cf(db, readopts, columnFamily)
+        } else {
+            self.iterator = rocksdb_create_iterator(db, readopts)
+        }
 
         // Set prefixes to gte and lte
         var gtePrefixed: String? = nil
