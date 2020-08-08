@@ -91,7 +91,7 @@ public final class RocksDB {
                 i += 1
             }
             
-            self.db = rocksdb_open_column_families(dbOptions, path.path, Int32(columnFamilies.count), columnFamiliesNamesPointer, columnFamiliesOptionsPointer, columnFamiliesPointer, &errorPointer)
+            self.db = rocksdb_open_column_families(dbOptions, path, Int32(columnFamilies.count), columnFamiliesNamesPointer, columnFamiliesOptionsPointer, columnFamiliesPointer, &errorPointer)
         }
         
 
