@@ -26,12 +26,14 @@ public final class RocksDB {
 
         case createColumnFamilyFailed(message: String)
         
+        case dropColumnFamilyFailed(message: String)
+        
         case dataNotConvertible
     }
 
     // MARK: - Properties
 
-    public let path: URL
+    public let path: String
 
     public let prefix: String?
 
@@ -42,7 +44,7 @@ public final class RocksDB {
     private let readOptions: OpaquePointer!
     private let db: OpaquePointer!
     
-    private var columnFamilies: Dictionary<String, OpaquePointer> = [:]
+    public var columnFamilies: Dictionary<String, OpaquePointer> = [:]
 
     private var errorPointer: UnsafeMutablePointer<Int8>? = nil
 
@@ -51,11 +53,11 @@ public final class RocksDB {
     /// Initializes an instance of RocksDB to interact with the given database file.
     /// Creates the database file if it does not exist.
     ///
-    /// - parameter path: The url to the database file on the filesystem.
+    /// - parameter path: The path to the database file on the filesystem.
     /// - parameter prefix: The prefix which will be appended to all keys for operations on this instance.
     ///
     /// - throws: If the database file cannot be opened (`RocksDB.Error.openFailed(message:)`)
-    public init(path: URL, prefix: String? = nil, columnFamilies: [String: OpaquePointer?] = [:]) throws {
+    public init(path: String, prefix: String? = nil, columnFamilies: [String: OpaquePointer?] = [:]) throws {
         self.path = path
         self.prefix = prefix
 
@@ -76,7 +78,7 @@ public final class RocksDB {
 
         // open DB
         if (columnFamilies.isEmpty) {
-            self.db = rocksdb_open(dbOptions, path.path, &errorPointer)
+            self.db = rocksdb_open(dbOptions, path, &errorPointer)
         } else {
             let columnFamiliesOptionsPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilies.count)
             let columnFamiliesNamesPointer = UnsafeMutablePointer<UnsafePointer<Int8>?>.allocate(capacity: columnFamilies.count)
@@ -113,11 +115,11 @@ public final class RocksDB {
         }
     }
 
-    public static func listColumnFamilies(path: URL, dbOptions: OpaquePointer) -> [String] {
+    public static func listColumnFamilies(path: String, dbOptions: OpaquePointer) -> [String] {
         var columnFamilies: [String] = []
         var err: UnsafeMutablePointer<Int8>? = nil
         var lencf: Int = 0
-        let columnFamiliesPointer = rocksdb_list_column_families(dbOptions, path.path, &lencf, &err)
+        let columnFamiliesPointer = rocksdb_list_column_families(dbOptions, path, &lencf, &err)
         if columnFamiliesPointer != nil && lencf > 0 {
             for i in 0 ... lencf - 1 {
                 columnFamilies.append(String(cString: columnFamiliesPointer![i]!))
@@ -126,6 +128,22 @@ public final class RocksDB {
 
         return columnFamilies
     }
+    /*
+    public static func getColumnFamilies(path: String, dbOptions: OpaquePointer, columnFamilyOptions: [String: OpaquePointer], columnFamilies: [String: OpaquePointer]) {
+        
+        let columnFamiliesOptionsPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
+        let columnFamiliesNamesPointer = UnsafeMutablePointer<UnsafePointer<Int8>?>.allocate(capacity: columnFamilyOptions.count)
+        let columnFamiliesPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
+        var i = 0
+        for (columnFamilyName, columnFamilyOption) in columnFamilyOptions {
+            columnFamiliesOptionsPointer[i] = columnFamilyOption
+            columnFamiliesNamesPointer[i] = (columnFamilyName as NSString).utf8String
+            self.columnFamilies[columnFamilyName] = columnFamiliesPointer[i]
+            i += 1
+        }
+        
+        rocksdb_open_column_families(dbOptions, path, Int32(columnFamilyOptions.count), columnFamilyOptions.keys, <#T##column_family_options: UnsafeMutablePointer<OpaquePointer?>!##UnsafeMutablePointer<OpaquePointer?>?#>, <#T##column_family_handles: UnsafeMutablePointer<OpaquePointer?>!##UnsafeMutablePointer<OpaquePointer?>!#>, <#T##errptr: UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>!##UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>!#>)
+    }*/
 
     // MARK: - Helper functions
 
@@ -160,9 +178,16 @@ public final class RocksDB {
         return key
     }
 
-    public func createColumnFamily(name: String, options: OpaquePointer) {
-        rocksdb_create_column_family(db, options, name, &errorPointer)
+    public func createColumnFamily(name: String, options: OpaquePointer) -> OpaquePointer {
+        let handle = rocksdb_create_column_family(db, options, name, &errorPointer)
         try! throwIfError(err: &errorPointer, throwable: Error.createColumnFamilyFailed)
+        return handle!
+    }
+    
+    public func dropColumnFamily(handle: OpaquePointer) {
+        var err: UnsafeMutablePointer<Int8>? = nil
+        rocksdb_drop_column_family(db, handle, &err)
+        try! throwIfError(err: &errorPointer, throwable: Error.dropColumnFamilyFailed)
     }
     
     // MARK: - Library functions
