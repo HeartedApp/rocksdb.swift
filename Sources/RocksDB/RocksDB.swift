@@ -76,7 +76,8 @@ public final class RocksDB {
 
         // Prefix
         if let prefix = prefix {
-            rocksdb_options_set_prefix_extractor(dbOptions, rocksdb_slicetransform_create_fixed_prefix(prefix.count))
+            rocksdb_options_set_prefix_extractor(dbOptions,
+                                                 rocksdb_slicetransform_create_fixed_prefix(prefix.count))
             rocksdb_readoptions_set_prefix_same_as_start(readOptions, 1)
         }
 
@@ -88,12 +89,17 @@ public final class RocksDB {
             let columnFamiliesNamesPointer = UnsafeMutablePointer<UnsafePointer<Int8>?>.allocate(capacity: columnFamilyOptions.count)
             let columnFamiliesPointer = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: columnFamilyOptions.count)
             
-            self.db = rocksdb_open_column_families(dbOptions, path, Int32(columnFamilies.count), columnFamiliesNamesPointer, columnFamiliesOptionsPointer, columnFamiliesPointer, &errorPointer)
-            
             var i = 0
             for (columnFamilyName, columnFamilyOption) in columnFamilyOptions {
                 columnFamiliesOptionsPointer[i] = columnFamilyOption
                 columnFamiliesNamesPointer[i] = (columnFamilyName as NSString).utf8String
+                i += 1
+            }
+            
+            self.db = rocksdb_open_column_families(dbOptions, path, Int32(columnFamilyOptions.count), columnFamiliesNamesPointer, columnFamiliesOptionsPointer, columnFamiliesPointer, &errorPointer)
+            
+            i = 0
+            for (columnFamilyName, _) in columnFamilyOptions {
                 self.columnFamilies[columnFamilyName] = columnFamiliesPointer[i]
                 i += 1
             }
@@ -166,15 +172,16 @@ public final class RocksDB {
         return key
     }
 
-    public func createColumnFamily(name: String, options: Options) -> OpaquePointer {
+    public func createColumnFamily(name: String, options: Options) {
         let handle = rocksdb_create_column_family(db, options, name, &errorPointer)
         try! throwIfError(err: &errorPointer, throwable: Error.createColumnFamilyFailed)
-        return handle!
+        self.columnFamilies[name] = handle!
     }
     
-    public func dropColumnFamily(_ handle: ColumnFamily) {
+    public func dropColumnFamily(_ columnFamilyName: String) {
         var err: UnsafeMutablePointer<Int8>? = nil
-        rocksdb_drop_column_family(db, handle, &err)
+        rocksdb_drop_column_family(db, columnFamilies[columnFamilyName], &err)
+        columnFamilies.removeValue(forKey: columnFamilyName)
         try! throwIfError(err: &errorPointer, throwable: Error.dropColumnFamilyFailed)
     }
     
@@ -199,14 +206,14 @@ public final class RocksDB {
         try throwIfError(err: &errorPointer, throwable: Error.putFailed)
     }
     
-    public func put(_ columnFamily: ColumnFamily, key: String, value: Data) throws {
+    public func put(_ columnFamilyName: String, key: String, value: Data) throws {
         let key = getPrefixedKey(from: key)
 
         let cValue = [UInt8](value).map { uint8Val in
             return Int8(bitPattern: uint8Val)
         }
 
-        rocksdb_put_cf(db, writeOptions, columnFamily, key, strlen(key), cValue, cValue.count, &errorPointer)
+        rocksdb_put_cf(db, writeOptions, columnFamilies[columnFamilyName], key, strlen(key), cValue, cValue.count, &errorPointer)
 
         try throwIfError(err: &errorPointer, throwable: Error.putFailed)
     }
@@ -224,8 +231,8 @@ public final class RocksDB {
         try put(key: key, value: value.makeData())
     }
 
-    public func put<T: RocksDBValueRepresentable>(_ columnFamily: ColumnFamily, key: String, value: T) throws {
-        try put(columnFamily, key: key, value: value.makeData())
+    public func put<T: RocksDBValueRepresentable>(_ columnFamilyName: String, key: String, value: T) throws {
+        try put(columnFamilyName, key: key, value: value.makeData())
     }
     
     /// Returns the value for the given key in the database.
@@ -274,8 +281,8 @@ public final class RocksDB {
     ///
     /// - throws: If the get operation fails (`Error.getFailed(message:)`) and
     ///           if the given type is not initializable from the data (`Error.dataNotConvertible`)
-    public func get<T: RocksDBValueInitializable>(_ columnFamily: ColumnFamily, type: T.Type, key: String) throws -> T {
-        return try type.init(data: get(columnFamily, key: key))
+    public func get<T: RocksDBValueInitializable>(_ columnFamilyName: String, type: T.Type, key: String) throws -> T {
+        return try type.init(data: get(columnFamilyName, key: key))
     }
     
     /// Returns the value for the given key in the database.
@@ -284,11 +291,11 @@ public final class RocksDB {
     /// - parameter key: The key to search the database for.
     ///
     /// - throws: If the get operation fails (`Error.getFailed(message:)`)
-    public func get(_ columnFamily: ColumnFamily, key: String) throws -> Data {
+    public func get(_ columnFamilyName: String, key: String) throws -> Data {
         let key = getPrefixedKey(from: key)
 
         var len: Int = 0
-        let returnValue = rocksdb_get_cf(db, readOptions, columnFamily, key, strlen(key), &len, &errorPointer)
+        let returnValue = rocksdb_get_cf(db, readOptions, columnFamilies[columnFamilyName], key, strlen(key), &len, &errorPointer)
 
         try throwIfError(err: &errorPointer, throwable: Error.getFailed)
 
@@ -317,10 +324,10 @@ public final class RocksDB {
     /// - parameter key: The key to delete.
     ///
     /// - throws: If the delete operation fails (`Error.deleteFailed(message:)`)
-    public func delete(_ columnFamily: ColumnFamily, key: String) throws {
+    public func delete(_ columnFamilyName: String, key: String) throws {
         let key = getPrefixedKey(from: key)
 
-        rocksdb_delete_cf(db, writeOptions, columnFamily, key, strlen(key), &errorPointer)
+        rocksdb_delete_cf(db, writeOptions, columnFamilies[columnFamilyName], key, strlen(key), &errorPointer)
 
         try throwIfError(err: &errorPointer, throwable: Error.deleteFailed)
     }
@@ -342,21 +349,21 @@ public final class RocksDB {
     }
     
     public func sequence<Key: RocksDBValueInitializable, Value: RocksDBValueInitializable>(
-        _ columnFamily: ColumnFamily,
+        _ columnFamilyName: String,
         keyType: Key.Type? = nil,
         valueType: Value.Type? = nil,
         gte: String? = nil
     ) -> RocksDBSequence<Key, Value> {
-        return RocksDBSequence(iterator: RocksDBIterator(db: db, columnFamily: columnFamily, prefix: prefix, gte: gte, lte: nil))
+        return RocksDBSequence(iterator: RocksDBIterator(db: db, columnFamily: columnFamilies[columnFamilyName], prefix: prefix, gte: gte, lte: nil))
     }
 
     public func sequence<Key: RocksDBValueInitializable, Value: RocksDBValueInitializable>(
-        _ columnFamily: ColumnFamily,
+        _ columnFamilyName: String,
         keyType: Key.Type? = nil,
         valueType: Value.Type? = nil,
         lte: String
     ) -> RocksDBSequence<Key, Value> {
-        return RocksDBSequence(iterator: RocksDBIterator(db: db, columnFamily: columnFamily, prefix: prefix, gte: nil, lte: lte))
+        return RocksDBSequence(iterator: RocksDBIterator(db: db, columnFamily: columnFamilies[columnFamilyName], prefix: prefix, gte: nil, lte: lte))
     }
 
     /// Write the given Operations as a batch update to the database.
