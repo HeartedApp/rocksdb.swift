@@ -294,6 +294,8 @@ let package = Package(
                 .define("ROCKSDB_PLATFORM_POSIX"),
                 .define("ROCKSDB_LIB_IO_POSIX"),
                 .define("PORTABLE"),
+                .define("LZ4"),
+                .define("ZSTD"),
                 .define(osEnvRocks),
 
                 // patches
