@@ -1,3 +1,9 @@
 [submodule "Sources/librocksdb/upstream"]
 	path = Sources/librocksdb/upstream
 	url = https://github.com/facebook/rocksdb.git
+[submodule "Sources/lz4"]
+	path = Sources/librocksdb/lz4
+	url = https://github.com/lz4/lz4.git
+[submodule "Sources/zstd"]
+	path = Sources/librocksdb/zstd
+	url = https://github.com/facebook/zstd.git

@@ -263,7 +263,11 @@ let package = Package(
                 "upstream/utilities/persistent_cache/persistent_cache_bench.cc",
 
                 // stuff we may activate later
-                "upstream/env/env_hdfs.cc"
+                "upstream/env/env_hdfs.cc",
+                
+                // Duplicated across packaged
+                "zstd/lib/common/xxhash.c",
+                "lz4/lib/xxhash.c",
             ],
             sources: [
                 "upstream/cache",
@@ -282,7 +286,10 @@ let package = Package(
                 "upstream/trace_replay",
                 "upstream/util",
                 "upstream/utilities",
-
+                "lz4/lib",
+                "zstd/lib",
+                "zstd/lib/dictBuilder",
+                "zstd/lib/common",
                 // patches
                 "patches/build_version.cc"
             ],
@@ -291,6 +298,10 @@ let package = Package(
                 .headerSearchPath("upstream"),
                 .headerSearchPath("upstream/include"),
                 .headerSearchPath("upstream/util"),
+                .headerSearchPath("lz4/lib"),
+                .headerSearchPath("zstd/lib"),
+                .headerSearchPath("zstd/lib/dictBuilder"),
+                .headerSearchPath("zstd/lib/common"),
                 .define("ROCKSDB_PLATFORM_POSIX"),
                 .define("ROCKSDB_LIB_IO_POSIX"),
                 .define("PORTABLE"),
@@ -306,9 +317,6 @@ let package = Package(
             name: "RocksDB",
             dependencies: ["librocksdb"],
             path: "Sources/RocksDB"),
-        .testTarget(
-            name: "RocksDBTests",
-            dependencies: ["RocksDB"]),
     ],
     cxxLanguageStandard: .cxx11
 )
