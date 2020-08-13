@@ -267,7 +267,6 @@ let package = Package(
                 
                 // Duplicated across packaged
                 "zstd/lib/common/xxhash.c",
-                "lz4/lib/xxhash.c",
             ],
             sources: [
                 "upstream/cache",
@@ -317,6 +316,9 @@ let package = Package(
             name: "RocksDB",
             dependencies: ["librocksdb"],
             path: "Sources/RocksDB"),
+        .testTarget(
+            name: "RocksDBTests",
+            dependencies: ["RocksDB"]),
     ],
     cxxLanguageStandard: .cxx11
 )
