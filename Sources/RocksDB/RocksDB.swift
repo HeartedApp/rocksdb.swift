@@ -124,6 +124,13 @@ public final class RocksDB {
             rocksdb_close(db)
         }
     }
+    
+    public static func columnFamilyOptions() -> Options {
+        let options = rocksdb_options_create()
+        rocksdb_options_set_compression(options, 4)
+        rocksdb_compactoptions_set_bottommost_level_compaction(options, 7)
+        return options!
+    }
 
     public static func listColumnFamilies(path: String, dbOptions: Options) -> [String] {
         var columnFamilies: [String] = []
