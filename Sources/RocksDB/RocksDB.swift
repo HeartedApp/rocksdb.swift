@@ -125,10 +125,20 @@ public final class RocksDB {
         }
     }
     
+    public static func dbOptions() -> Options {
+        let options = rocksdb_options_create()
+        rocksdb_options_set_compression(options, 4)
+        rocksdb_options_set_max_background_compactions(options, 4)
+        rocksdb_options_set_max_background_flushes(options, 2)
+        rocksdb_options_set_bytes_per_sync(options, 1048576)
+        return options!
+    }
+    
     public static func columnFamilyOptions() -> Options {
         let options = rocksdb_options_create()
         rocksdb_options_set_compression(options, 4)
-        rocksdb_compactoptions_set_bottommost_level_compaction(options, 7)
+        rocksdb_options_set_level_compaction_dynamic_level_bytes(options, 1)
+        rocksdb_compactoptions_set_bottommost_level_compaction(options, 4)
         return options!
     }
 
