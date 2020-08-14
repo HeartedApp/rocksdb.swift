@@ -61,11 +61,11 @@ public final class RocksDB {
     /// - parameter prefix: The prefix which will be appended to all keys for operations on this instance.
     ///
     /// - throws: If the database file cannot be opened (`RocksDB.Error.openFailed(message:)`)
-    public init(path: String, prefix: String? = nil, columnFamilyOptions: [String: ColumnFamily?] = [:]) throws {
+    public init(path: String, prefix: String? = nil, dbOptions: Options, columnFamilyOptions: [String: ColumnFamily?] = [:]) throws {
         self.path = path
         self.prefix = prefix
 
-        dbOptions = rocksdb_options_create()
+        self.dbOptions = dbOptions
         // create the DB if it's not already present
         rocksdb_options_set_create_if_missing(dbOptions, 1)
 
@@ -138,7 +138,6 @@ public final class RocksDB {
         let options = rocksdb_options_create()
         rocksdb_options_set_compression(options, 4)
         rocksdb_options_set_level_compaction_dynamic_level_bytes(options, 1)
-        rocksdb_compactoptions_set_bottommost_level_compaction(options, 4)
         return options!
     }
 
