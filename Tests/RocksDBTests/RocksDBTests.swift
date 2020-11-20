@@ -4,6 +4,7 @@ import XCTest
 final class RocksDBTests: XCTestCase {
 
     var rocksDB: RocksDB!
+    var dbOptions = RocksDB.dbOptions()
 
     override func setUp() {
         super.setUp()
@@ -15,7 +16,7 @@ final class RocksDBTests: XCTestCase {
 
     func testSimplePut() {
         let path = "/tmp/\(UUID().uuidString)"
-        rocksDB = try! RocksDB(path: path)
+        rocksDB = try! RocksDB(path: path, dbOptions: dbOptions)
 
         try! rocksDB.put(key: "testText", value: "lolamkhaha")
         try! rocksDB.put(key: "testEmoji", value: "😂")
@@ -34,7 +35,7 @@ final class RocksDBTests: XCTestCase {
 
     func testSimpleDelete() {
         let path = "/tmp/\(UUID().uuidString)"
-        rocksDB = try! RocksDB(path: path)
+        rocksDB = try! RocksDB(path: path, dbOptions: dbOptions)
 
         try! rocksDB.put(key: "testDeleteKey", value: "this is a simple value 😘")
         try! rocksDB.delete(key: "testDeleteKey")
@@ -49,7 +50,7 @@ final class RocksDBTests: XCTestCase {
     func testPrefixedPut() {
         let prefixedPath = "/tmp/\(UUID().uuidString)"
 
-        let prefixedDB = try! RocksDB(path: prefixedPath, prefix: "correctprefix")
+        let prefixedDB = try! RocksDB(path: prefixedPath, prefix: "correctprefix", dbOptions: dbOptions)
 
         try! prefixedDB.put(key: "testText", value: "lolamkhaha")
         try! prefixedDB.put(key: "testEmoji", value: "😂")
@@ -63,7 +64,7 @@ final class RocksDBTests: XCTestCase {
 
         prefixedDB.closeDB()
 
-        let wrongPrefixedDB = try! RocksDB(path: prefixedPath, prefix: "wrongprefix")
+        let wrongPrefixedDB = try! RocksDB(path: prefixedPath, prefix: "wrongprefix", dbOptions: dbOptions)
 
         XCTAssertEqual(try! wrongPrefixedDB.get(type: String.self, key: "testText"), "")
         XCTAssertEqual(try! wrongPrefixedDB.get(type: String.self, key: "testEmoji"), "")
@@ -72,7 +73,7 @@ final class RocksDBTests: XCTestCase {
 
         wrongPrefixedDB.closeDB()
 
-        let prefixedDB2 = try! RocksDB(path: prefixedPath, prefix: "correctprefix")
+        let prefixedDB2 = try! RocksDB(path: prefixedPath, prefix: "correctprefix", dbOptions: dbOptions)
 
         XCTAssertEqual(try! prefixedDB2.get(type: String.self, key: "testText"), "lolamkhaha")
         XCTAssertEqual(try! prefixedDB2.get(type: String.self, key: "testEmoji"), "😂")
@@ -87,7 +88,7 @@ final class RocksDBTests: XCTestCase {
     func testPrefixedDelete() {
         let prefixedPath = "/tmp/\(UUID().uuidString)"
 
-        let prefixedDB = try! RocksDB(path: prefixedPath, prefix: "correctprefix")
+        let prefixedDB = try! RocksDB(path: prefixedPath, prefix: "correctprefix", dbOptions: dbOptions)
 
         try! prefixedDB.put(key: "testText", value: "lolamkhaha")
         try! prefixedDB.put(key: "testEmoji", value: "😂")
@@ -96,7 +97,7 @@ final class RocksDBTests: XCTestCase {
 
         prefixedDB.closeDB()
 
-        let wrongPrefixedDB = try! RocksDB(path: prefixedPath, prefix: "wrongprefix")
+        let wrongPrefixedDB = try! RocksDB(path: prefixedPath, prefix: "wrongprefix", dbOptions: dbOptions)
 
         try! wrongPrefixedDB.put(key: "testText", value: "lolamkhaha")
         try! wrongPrefixedDB.put(key: "testEmoji", value: "😂")
@@ -105,7 +106,7 @@ final class RocksDBTests: XCTestCase {
 
         wrongPrefixedDB.closeDB()
 
-        let prefixedDB2 = try! RocksDB(path: prefixedPath, prefix: "correctprefix")
+        let prefixedDB2 = try! RocksDB(path: prefixedPath, prefix: "correctprefix", dbOptions: dbOptions)
 
         try! prefixedDB2.delete(key: "testText")
         try! prefixedDB2.delete(key: "testEmoji")
@@ -119,7 +120,7 @@ final class RocksDBTests: XCTestCase {
 
         prefixedDB2.closeDB()
 
-        let wrongPrefixedDB2 = try! RocksDB(path: prefixedPath, prefix: "wrongprefix")
+        let wrongPrefixedDB2 = try! RocksDB(path: prefixedPath, prefix: "wrongprefix", dbOptions: dbOptions)
 
         XCTAssertEqual(try! wrongPrefixedDB2.get(type: String.self, key: "testText"), "lolamkhaha")
         XCTAssertEqual(try! wrongPrefixedDB2.get(type: String.self, key: "testEmoji"), "😂")
@@ -133,7 +134,7 @@ final class RocksDBTests: XCTestCase {
 
     func testSimpleIterator() {
         let path = "/tmp/\(UUID().uuidString)"
-        rocksDB = try! RocksDB(path: path)
+        rocksDB = try! RocksDB(path: path, dbOptions: dbOptions)
 
         let orderedKeysAndValues = [
             (key: "testEmoji", value: "😂"),
@@ -194,7 +195,7 @@ final class RocksDBTests: XCTestCase {
     func testBatchOperations() {
         let prefixedPath = "/tmp/\(UUID().uuidString)"
 
-        let prefixedDB = try! RocksDB(path: prefixedPath, prefix: "correctprefix")
+        let prefixedDB = try! RocksDB(path: prefixedPath, prefix: "correctprefix", dbOptions: dbOptions)
 
         try! prefixedDB.put(key: "testText", value: "lolamkhaha")
         try! prefixedDB.put(key: "testEmoji", value: "😂")
